@@ -8,6 +8,7 @@ services:
       dockerfile: ApiPoller/Dockerfile
     environment:
       - Logging__LogLevel__Default
+      - LacerteApiSettings__ApplicationStatePath
       - SendGridSettings__ApiKey
       - SendGridSettings__FromAddress
       - SendGridSettings__FromName
@@ -15,6 +16,6 @@ services:
       - NotificationSettings__RecipientEmailAddresses__0
       - NotificationSettings__RecipientEmailAddresses__1
     volumes:
-      - /opt/containers/LacerteUpdateChecker/appState.json:/app/publish/appState.json:rw
+      - /opt/containers/LacerteUpdateChecker/:/data/:rw
     network_mode: host
     restart: unless-stopped

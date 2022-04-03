@@ -16,6 +16,7 @@ jobs:
       - name: Build and test
         env:
           Logging__LogLevel__Default: Debug
+          LacerteApiSettings__ApplicationStatePath: ${{ secrets.LacerteApiSettings__ApplicationStatePath }}
           SendGridSettings__ApiKey: ${{ secrets.SendGridSettings__ApiKey }}
           SendGridSettings__FromAddress: ${{ secrets.SendGridSettings__FromAddress }}
           SendGridSettings__FromName: ${{ secrets.SendGridSettings__FromName }}
@@ -54,6 +55,7 @@ jobs:
         uses: appleboy/ssh-action@master
         env:
           Logging__LogLevel__Default: Debug
+          LacerteApiSettings__ApplicationStatePath: ${{ secrets.LacerteApiSettings__ApplicationStatePath }}
           SendGridSettings__ApiKey: ${{ secrets.SendGridSettings__ApiKey }}
           SendGridSettings__FromAddress: ${{ secrets.SendGridSettings__FromAddress }}
           SendGridSettings__FromName: ${{ secrets.SendGridSettings__FromName }}
@@ -62,7 +64,7 @@ jobs:
           NotificationSettings__RecipientEmailAddresses__1: ${{ secrets.NotificationSettings__RecipientEmailAddresses__1 }}
         with:
           debug: false
-          envs: SendGridSettings__ApiKey, SendGridSettings__FromAddress, SendGridSettings__FromName, SendGridSettings__Subject, NotificationSettings__RecipientEmailAddresses
+          envs: Logging__LogLevel__Default, LacerteApiSettings__ApplicationStatePath, SendGridSettings__ApiKey, SendGridSettings__FromAddress, SendGridSettings__FromName, SendGridSettings__Subject, NotificationSettings__RecipientEmailAddresses
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.KEY }}
@@ -71,6 +73,7 @@ jobs:
           # NOTE: If you don't _also_ export the variable in the script, docker won't be able to see it!
           script: |
             export Logging__LogLevel__Default=Debug
+            export LacerteApiSettings__ApplicationStatePath=${{ secrets.LacerteApiSettings__ApplicationStatePath }}
             export SendGridSettings__ApiKey=${{ secrets.SendGridSettings__ApiKey }}
             export SendGridSettings__FromAddress=${{ secrets.SendGridSettings__FromAddress }}
             export SendGridSettings__FromName=${{ secrets.SendGridSettings__FromName }}
