@@ -49,61 +49,53 @@ public class PollWorker : BackgroundService
 	{
 		using var client = new SoapClient(_appSettings.ApiUrl, _appSettings.ApiNamespace);
 
-		while (!cancellationToken.IsCancellationRequested)
+		var requestParams = new GetUpdateManifestRequest(new[]
+			{
+				new ProductRequest(
+					_getUpdateManifestAction.ProductName,
+					_getUpdateManifestAction.ProductVersion,
+					_getUpdateManifestAction.MinorVersion,
+					_getUpdateManifestAction.IncrementalVersion,
+					_getUpdateManifestAction.ExcludeLocations
+				)
+			},
+			new Source(_getUpdateManifestAction.SourceName)
+		);
+
+		var checkStartedAt = DateTime.UtcNow;
+
+		// Don't know why, but the payload needs "mr" wrapped around it
+		var req = await client.PostAsync<GetUpdateManifestResponse>(_getUpdateManifestAction.ActionName, new {
+			mr = requestParams
+		});
+
+		var xml = WebUtility.HtmlDecode(req.Value);
+		var components = ParseComponentsFromUpdateManifest(xml);
+
+		if (components is null)
+			return;
+
+		var newestComponent = components.MaxBy(x => x.LastUpdatedAt)!;
+		_logger.LogInformation("Found newest component: {ReleaseDate}", newestComponent.LastUpdatedAt);
+
+		var lastKnownState = await GetApplicationState();
+		_logger.LogDebug("Last known component age: {LastAge}", lastKnownState?.LastCheckAt);
+
+		if (lastKnownState?.LastKnownVersionTimestamp is not null &&
+		    lastKnownState.LastKnownVersionTimestamp.Value <= newestComponent.LastUpdatedAt)
 		{
-			var requestParams = new GetUpdateManifestRequest(new[]
-				{
-					new ProductRequest(
-						_getUpdateManifestAction.ProductName,
-						_getUpdateManifestAction.ProductVersion,
-						_getUpdateManifestAction.MinorVersion,
-						_getUpdateManifestAction.IncrementalVersion,
-						_getUpdateManifestAction.ExcludeLocations
-					)
-				},
-				new Source(_getUpdateManifestAction.SourceName)
-			);
-
-			var checkStartedAt = DateTime.UtcNow;
-
-			// Don't know why, but the payload needs "mr" wrapped around it
-			var req = await client.PostAsync<GetUpdateManifestResponse>(_getUpdateManifestAction.ActionName, new {
-				mr = requestParams
-			});
-
-			var xml = WebUtility.HtmlDecode(req.Value);
-			var components = ParseComponentsFromUpdateManifest(xml);
-
-			if (components is null)
-			{
-				await WaitForNextRun(cancellationToken);
-				continue;
-			}
-
-			var newestComponent = components.MaxBy(x => x.LastUpdatedAt)!;
-			_logger.LogInformation("Found newest component: {ReleaseDate}", newestComponent.LastUpdatedAt);
-
-			var lastKnownState = await GetApplicationState();
-			_logger.LogDebug("Last known component age: {LastAge}", lastKnownState?.LastCheckAt);
-
-			if (lastKnownState?.LastKnownVersionTimestamp is not null &&
-			    lastKnownState.LastKnownVersionTimestamp.Value <= newestComponent.LastUpdatedAt)
-			{
-				_logger.LogDebug("Newest component is <= last known component age; skipping");
-				await WaitForNextRun(cancellationToken);
-				continue;
-			}
-			
-			_logger.LogInformation("Found new component version");
-			await _emailer.SendNewVersionNotification(
-				detectedAt: checkStartedAt,
-				newestComponent.LastUpdatedAt,
-				DateTime.UtcNow + _pollingInterval,
-				cancellationToken);
-			await SetApplicationState(new ApplicationState(DateTime.UtcNow, newestComponent.LastUpdatedAt));
-
-			await WaitForNextRun(cancellationToken);
+			_logger.LogDebug("Newest component is <= last known component age; skipping");
+			return;
 		}
+		
+		_logger.LogInformation("Found new component version");
+		await _emailer.SendNewVersionNotification(
+			detectedAt: checkStartedAt,
+			newestComponent.LastUpdatedAt,
+			DateTime.UtcNow + _pollingInterval,
+			cancellationToken);
+		_logger.LogInformation("Sent e-mail notification");
+		await SetApplicationState(new ApplicationState(DateTime.UtcNow, newestComponent.LastUpdatedAt));
 	}
 	
 	private async Task WaitForNextRun(CancellationToken cancellationToken) => await Task.Delay(_pollingInterval, cancellationToken);
