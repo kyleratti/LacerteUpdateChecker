@@ -1,0 +1,84 @@
+name: CI/CD
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v2
+      - name: Set up .NET 6
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: "6.0.x"
+      - name: Install tools
+        run: |
+          dotnet tool restore
+      - name: Build and test
+        env:
+          Logging__LogLevel__Default: Debug
+          SendGridSettings__ApiKey: ${{ secrets.SendGridSettings__ApiKey }}
+          SendGridSettings__FromAddress: ${{ secrets.SendGridSettings__FromAddress }}
+          SendGridSettings__FromName: ${{ secrets.SendGridSettings__FromName }}
+          SendGridSettings__Subject: ${{ secrets.SendGridSettings__Subject }}
+          NotificationSettings__RecipientEmailAddresses__0: ${{ secrets.NotificationSettings__RecipientEmailAddresses__0 }}
+          NotificationSettings__RecipientEmailAddresses__1: ${{ secrets.NotificationSettings__RecipientEmailAddresses__1 }}
+        run: |
+          dotnet build
+          dotnet test
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    steps:
+      - uses: actions/checkout@v2
+      - name: Clean server build dir
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.KEY }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd ${{ secrets.BUILD_DIR }}
+            rm -rf ${{ secrets.BUILD_DIR }}
+      - name: Copy to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.KEY }}
+          port: ${{ secrets.PORT }}
+          source: "./*"
+          target: "${{ secrets.BUILD_DIR }}"
+      - name: Build and deploy container
+        uses: appleboy/ssh-action@master
+        env:
+          Logging__LogLevel__Default: Debug
+          SendGridSettings__ApiKey: ${{ secrets.SendGridSettings__ApiKey }}
+          SendGridSettings__FromAddress: ${{ secrets.SendGridSettings__FromAddress }}
+          SendGridSettings__FromName: ${{ secrets.SendGridSettings__FromName }}
+          SendGridSettings__Subject: ${{ secrets.SendGridSettings__Subject }}
+          NotificationSettings__RecipientEmailAddresses__0: ${{ secrets.NotificationSettings__RecipientEmailAddresses__0 }}
+          NotificationSettings__RecipientEmailAddresses__1: ${{ secrets.NotificationSettings__RecipientEmailAddresses__1 }}
+        with:
+          debug: false
+          envs: SendGridSettings__ApiKey, SendGridSettings__FromAddress, SendGridSettings__FromName, SendGridSettings__Subject, NotificationSettings__RecipientEmailAddresses
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.KEY }}
+          port: ${{ secrets.PORT }}
+          command_timeout: 20m # .NET 6 projects were failing at 10m (default)
+          # NOTE: If you don't _also_ export the variable in the script, docker won't be able to see it!
+          script: |
+            export Logging__LogLevel__Default=Debug
+            export SendGridSettings__ApiKey=${{ secrets.SendGridSettings__ApiKey }}
+            export SendGridSettings__FromAddress=${{ secrets.SendGridSettings__FromAddress }}
+            export SendGridSettings__FromName=${{ secrets.SendGridSettings__FromName }}
+            export SendGridSettings__Subject=${{ secrets.SendGridSettings__Subject }}
+            export NotificationSettings__RecipientEmailAddresses__0=${{ secrets.NotificationSettings__RecipientEmailAddresses__0 }}
+            export NotificationSettings__RecipientEmailAddresses__1=${{ secrets.NotificationSettings__RecipientEmailAddresses__1 }}
+            cd ${{ secrets.BUILD_DIR }}
+            docker-compose build
+            docker-compose down
+            docker-compose up -d
+            #docker image prune -f

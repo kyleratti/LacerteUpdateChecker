@@ -1,0 +1,20 @@
+version: "3.4"
+
+services:
+  lacerteupdatechecker:
+    image: ${DOCKER_REGISTRY-}lacerteupdatechecker
+    build:
+      context: .
+      dockerfile: ApiPoller/Dockerfile
+    environment:
+      - Logging__LogLevel__Default
+      - SendGridSettings__ApiKey
+      - SendGridSettings__FromAddress
+      - SendGridSettings__FromName
+      - SendGridSettings__Subject
+      - NotificationSettings__RecipientEmailAddresses__0
+      - NotificationSettings__RecipientEmailAddresses__1
+    volumes:
+      - /opt/containers/LacerteUpdateChecker/appState.json:/app/publish/appState.json:rw
+    network_mode: host
+    restart: unless-stopped
