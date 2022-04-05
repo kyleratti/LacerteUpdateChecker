@@ -76,13 +76,14 @@ public class PollWorker : BackgroundService
 			return;
 
 		var newestComponent = components.MaxBy(x => x.LastUpdatedAt)!;
-		_logger.LogInformation("Found newest component: {ReleaseDate}", newestComponent.LastUpdatedAt);
+		_logger.LogInformation("Newest component: {LastUpdatedAt}", newestComponent.LastUpdatedAt);
 
 		var lastKnownState = await GetApplicationState();
-		_logger.LogDebug("Last known component age: {LastAge}", lastKnownState?.LastCheckAt);
+		if (lastKnownState?.LastKnownVersionTimestamp is not null)
+			_logger.LogDebug("Last known component age: {LastAge}", lastKnownState.LastKnownVersionTimestamp.Value);
 
 		if (lastKnownState?.LastKnownVersionTimestamp is not null &&
-		    lastKnownState.LastKnownVersionTimestamp.Value <= newestComponent.LastUpdatedAt)
+		    newestComponent.LastUpdatedAt <= lastKnownState.LastKnownVersionTimestamp.Value)
 		{
 			_logger.LogDebug("Newest component is <= last known component age; skipping");
 			return;
