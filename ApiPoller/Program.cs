@@ -4,6 +4,14 @@ using ApiPoller.Services;
 
 IHost host = Host.CreateDefaultBuilder(args)
 	.ConfigureServices(ConfigureServices)
+	.ConfigureLogging(x =>
+		{
+			x.AddSimpleConsole(opt =>
+			{
+				opt.TimestampFormat = "HH:mm:ss ";
+			});
+		}
+	)
 	.Build();
 
 await host.RunAsync();
